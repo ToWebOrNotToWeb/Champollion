@@ -1,97 +1,114 @@
-import puppeteer from 'puppeteer-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import { connect } from 'puppeteer-real-browser'
+// Nouvelle tentative de bot, cette fois via l'api d'openai (gpt-4-vision)
+import OpenAI from "openai";
+import fs from "fs";
+import pdfkit from "pdfkit";
 
-const email = "silvia.carter@gmail.com";
-const password = "PuK$-f6QDJ7VVip";
+const openai = new OpenAI();
 
-puppeteer.use(StealthPlugin());
-
-
-connect({
-
-    headless: 'auto',
-
-    args: [],
-
-    customConfig: {},
-
-    skipTarget: [],
-
-    fingerprint: false,
-
-    turnstile: true,
-
-    connectOption: {},
-
-    fpconfig: {},
+//All : "germany", "france", "luxembourg", "belgium", "switzerland", "italy", "spain", "norway", "sweden", "united-kingdom" "turkey", "portugal", "poland", "ireland", "iceland", "hungary", "greece", "finland", "czechia", "algeria", "albania", "australia", "china", "cote-divoire", "denmark", "hong-kong", "india", "japan", "south-korea", "monaco", "croatia", "qatar", "the-united-states-of-america", "the-russian-federation", "singapore"
 
 
+// Special case : "china" need this url = `https://raw.githubusercontent.com/ToWebOrNotToWeb/digitalReportData${Country}/blob/main/${country}_data/${country}_data_${i}.png`
 
-})
-.then(async response => {
-    (async () => {
+const countrys = [];
 
-        console.log('Ready to go!');
+const highestNb = 104;
 
+async function imgToText(country, i) {
 
-        const {browser, page} = response;
-        
-        await page.setViewport({
-            width: 1920 + Math.floor(Math.random() * 100),
-            height: 1080 + Math.floor(Math.random() * 100),
-            deviceScaleFactor: 1,
-            hasTouch: false,
-            isLandscape: false,
-            isMobile: false,
+    try {
+
+        const Country = country.charAt(0).toUpperCase() + country.slice(1);
+
+        const url = `https://raw.githubusercontent.com/ToWebOrNotToWeb/digitalReportData${Country}/blob/main/china_data/${country}_data_${i}.png`;
+
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: [
+                {
+                    role: "user",
+                    content: [
+                    { type: "text", text: "retranscrit l'images suivante de maniére textuel." },
+                    {
+                        type: "image_url",
+                        image_url: {
+                        "url": url,
+                        },
+                    },
+                    ],
+                },
+            ],
         });
-    
-        await page.goto('https://chatgpt.com');
-    
-
-        await page.waitForSelector('[data-testid="login-button"]');
-        await page.click('[data-testid="login-button"]');
-    
-
-        await page.waitForSelector('#email-input');
-        await page.type('#email-input', email);
-    
-
-        await page.keyboard.press('Enter');
-
-        await page.waitForSelector('#password');
-        await page.type('#password', password);
-
-        
-        let form = await page.$('[data-form-primary="true"]');
-        
-        await form.evaluate(form => {
-            form.style.backgroundColor = 'red';
-            form.submit();
-            // console.log(form);
-            // console.log(form.children.length);
-            // let target = form.children[3]
-            // console.log(target);
-            // target.click();
-            // let trueTarget = target.children[0];
-            // trueTarget.style.backgroundColor = 'blue';
-            // trueTarget.focus();
-            // let event = new MouseEvent('click', {
-            //     view: window,
-            //     bubbles: true,
-            //     cancelable: true
-            // });
-            // trueTarget.dispatchEvent(event);
-
-
+        // console.log(response.choices[0].message.content);
+        fs.appendFile(`./${country}.txt`, response.choices[0].message.content, (err) => {
+            if (err) throw err;
+            console.log(`Image ${i} translated !`);
         });
 
-        
-    })();
-    
-})
-.catch(error=>{
-    console.log(error.message)
-})
+    } catch (error) {
+        console.error(error.status);
+        if (error.status === 429) {
+            console.log("Rate limit reached, waiting 2 second before retrying...");
+            setTimeout(() => {
+                imgToText(country, i);
+            }, 2000);
+        }
+    };
 
+};
 
+async function textToPdf(country){
+
+    try {
+
+        if (!fs.existsSync(`./${country}.txt`)) {
+            throw new Error('Text file not found');
+        };
+
+        const content = fs.readFileSync(`./${country}.txt`, 'utf8');
+
+        const doc = new pdfkit();
+
+        doc.pipe(fs.createWriteStream(`./${country}.pdf`));
+
+        doc.text(content);
+
+        doc.end();
+        console.log("Pdf created !");
+
+    } catch (error) {
+        console.error(error);
+    };
+
+};
+
+async function processCountries(countrys, highestNb) {
+
+    for (const country of countrys) {
+
+        const promises = [];
+
+        for (let i = 1; i < highestNb; i++) {
+
+            promises.push(
+
+                new Promise((resolve) => {
+
+                    setTimeout(() => {
+
+                        imgToText(country, i);
+                        resolve();
+
+                    }, i * 2000);
+
+                })
+            );
+        };
+
+        await Promise.all(promises);
+        textToPdf(country);
+
+    }
+}
+
+processCountries(countrys, highestNb);
