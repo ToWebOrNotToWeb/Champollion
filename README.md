@@ -7,7 +7,7 @@ Les images doivent avoir un url en ligne. En locurence ici les image on était e
 
 ## Utilisation
 
-Dans le cmb `git clone git@github.com:ToWebOrNotToWeb/Champollion.git`
+Dans le cmd `git clone git@github.com:ToWebOrNotToWeb/Champollion.git`
 
 Modifier les url en fonction des besoins
 
